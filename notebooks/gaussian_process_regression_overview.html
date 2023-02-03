@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="John Waczak">
-<meta name="dcterms.date" content="2023-02-01">
+<meta name="dcterms.date" content="2023-02-03">
 
 <title>Gaussian Processes and Gaussian Process Regression</title>
 <style>
@@ -144,7 +144,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">February 1, 2023</p>
+      <p class="date">February 3, 2023</p>
     </div>
   </div>
   
@@ -860,11 +860,12 @@ Note
 <div class="cell" data-execution_count="16">
 <div class="sourceCode cell-code" id="cb25"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Optim</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
-<div class="cell" data-execution_count="17">
+<div class="cell" data-execution_count="96">
 <div class="sourceCode cell-code" id="cb26"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co"># helpuer functions to insure parameters are positive</span></span>
-<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="fu">softplus</span>(x) <span class="op">=</span> <span class="fu">log</span>(<span class="fl">1</span><span class="fu">+exp</span>(x))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-<div class="cell-output cell-output-display" data-execution_count="17">
-<pre><code>softplus (generic function with 1 method)</code></pre>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="fu">softplus</span>(x) <span class="op">=</span> <span class="fu">log</span>(<span class="fl">1</span><span class="fu">+exp</span>(x))</span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a><span class="fu">softplusinv</span>(x) <span class="op">=</span> <span class="fu">log</span>(<span class="fu">exp</span>(x)<span class="op">-</span><span class="fl">1</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display" data-execution_count="96">
+<pre><code>softplusinv (generic function with 1 method)</code></pre>
 </div>
 </div>
 <p>We want to maximize the log-marginal-likelihood and therefore want to minimize minus that quantitty:</p>
@@ -929,6 +930,120 @@ Note
 <span id="cb34-20"><a href="#cb34-20" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(p1, p2, layout<span class="op">=</span>(<span class="fl">1</span>,<span class="fl">2</span>), size<span class="op">=</span>(<span class="fl">900</span>, <span class="fl">500</span>), plot_title<span class="op">=</span><span class="st">"Gaussian Process Regression Fits"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-display" data-execution_count="30">
 <p><img src="gaussian_process_regression_overview_files/figure-html/cell-22-output-1.svg" class="img-fluid"></p>
+</div>
+</div>
+<p>Excellent! Now that we have the hang of it, let’s try another fit for a function of two variables.</p>
+<div class="cell" data-execution_count="157">
+<div class="sourceCode cell-code" id="cb35"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a>n<span class="op">=</span><span class="fl">1000</span></span>
+<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a>xs <span class="op">=</span> (<span class="fu">rand</span>(n,<span class="fl">2</span>) <span class="op">.-</span> <span class="fl">0.5</span>)</span>
+<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a>x₁ <span class="op">=</span> xs[<span class="op">:</span>,<span class="fl">1</span>]</span>
+<span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a>x₂ <span class="op">=</span> xs[<span class="op">:</span>,<span class="fl">2</span>]</span>
+<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a>y <span class="op">=</span> x₁<span class="op">.^</span><span class="fl">5</span> <span class="op">.+</span> x₂<span class="op">.^</span><span class="fl">4</span> <span class="op">.-</span> x₁<span class="op">.^</span><span class="fl">4</span> <span class="op">.-</span> x₂<span class="op">.^</span><span class="fl">3</span> </span>
+<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a>Xtrain <span class="op">=</span> Tables.<span class="fu">table</span>(xs[<span class="fl">1</span><span class="op">:</span><span class="fu">Int</span>(<span class="fl">0.9</span><span class="op">*</span>n), <span class="op">:</span>], header<span class="op">=</span>[<span class="op">:</span>x₁, <span class="op">:</span>x₂])</span>
+<span id="cb35-8"><a href="#cb35-8" aria-hidden="true" tabindex="-1"></a>Xtest <span class="op">=</span> Tables.<span class="fu">table</span>(xs[<span class="fu">Int</span>(<span class="fl">0.9</span><span class="op">*</span>n)<span class="op">+</span><span class="fl">1</span><span class="op">:</span><span class="kw">end</span>, <span class="op">:</span>], header<span class="op">=</span>[<span class="op">:</span>x₁, <span class="op">:</span>x₂])</span>
+<span id="cb35-9"><a href="#cb35-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-10"><a href="#cb35-10" aria-hidden="true" tabindex="-1"></a>ytrain <span class="op">=</span> y[<span class="fl">1</span><span class="op">:</span><span class="fu">Int</span>(<span class="fl">0.9</span><span class="op">*</span>n)]</span>
+<span id="cb35-11"><a href="#cb35-11" aria-hidden="true" tabindex="-1"></a>ytest <span class="op">=</span> y[<span class="fu">Int</span>(<span class="fl">0.9</span><span class="op">*</span>n)<span class="op">+</span><span class="fl">1</span><span class="op">:</span><span class="kw">end</span>]</span>
+<span id="cb35-12"><a href="#cb35-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-13"><a href="#cb35-13" aria-hidden="true" tabindex="-1"></a><span class="fu">scatter</span>(Xtrain.x₁, Xtrain.x₂, ytrain, ms<span class="op">=</span><span class="fl">3</span>, label<span class="op">=</span><span class="st">"training points"</span>)</span>
+<span id="cb35-14"><a href="#cb35-14" aria-hidden="true" tabindex="-1"></a><span class="fu">scatter!</span>(Xtest.x₁, Xtest.x₂, ytest, color<span class="op">=:</span>red, ms<span class="op">=</span><span class="fl">3</span>, label<span class="op">=</span><span class="st">"testing points"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display" data-execution_count="157">
+<p><img src="gaussian_process_regression_overview_files/figure-html/cell-23-output-1.svg" class="img-fluid"></p>
+</div>
+</div>
+<div class="cell" data-execution_count="162">
+<div class="sourceCode cell-code" id="cb36"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="co"># this is me just trying to manuallyfind some good parameters</span></span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>σf² <span class="op">=</span> <span class="fl">0.25</span></span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a>ℓ <span class="op">=</span> <span class="fl">0.3</span></span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a>σn² <span class="op">=</span> <span class="fl">0.25</span></span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a>k <span class="op">=</span> σf²  <span class="op">*</span> (<span class="fu">SqExponentialKernel</span>() <span class="op">∘</span> <span class="fu">ScaleTransform</span>(<span class="fl">1</span><span class="op">/</span><span class="fl">2</span>ℓ<span class="op">^</span><span class="fl">2</span>))</span>
+<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-8"><a href="#cb36-8" aria-hidden="true" tabindex="-1"></a><span class="co"># test out kernels interface by generating matrix from k</span></span>
+<span id="cb36-9"><a href="#cb36-9" aria-hidden="true" tabindex="-1"></a>K <span class="op">=</span> <span class="fu">kernelmatrix</span>(k, Tables.<span class="fu">matrix</span>(Xtrain)<span class="ch">')  # transpose as we want size (n_features, n_datapoints)</span></span>
+<span id="cb36-10"><a href="#cb36-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-11"><a href="#cb36-11" aria-hidden="true" tabindex="-1"></a>f <span class="op">=</span> <span class="fu">GP</span>(<span class="fl">0</span>, k)</span>
+<span id="cb36-12"><a href="#cb36-12" aria-hidden="true" tabindex="-1"></a>fₓ <span class="op">=</span> <span class="fu">f</span>(Tables.<span class="fu">matrix</span>(Xtrain)<span class="ch">', σn²)</span></span>
+<span id="cb36-13"><a href="#cb36-13" aria-hidden="true" tabindex="-1"></a><span class="fu">logpdf</span>(fₓ, ytrain)  <span class="co"># this is a marginal likelihood</span></span>
+<span id="cb36-14"><a href="#cb36-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-15"><a href="#cb36-15" aria-hidden="true" tabindex="-1"></a>p_fₓ <span class="op">=</span> <span class="fu">posterior</span>(fₓ, ytrain)</span>
+<span id="cb36-16"><a href="#cb36-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-17"><a href="#cb36-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-18"><a href="#cb36-18" aria-hidden="true" tabindex="-1"></a>fₓ_pred_train <span class="op">=</span> <span class="fu">p_fₓ</span>(Tables.<span class="fu">matrix</span>(Xtrain)<span class="ch">')</span></span>
+<span id="cb36-19"><a href="#cb36-19" aria-hidden="true" tabindex="-1"></a>ypred_train <span class="op">=</span> <span class="fu">mean</span>(fₓ_pred_train)</span>
+<span id="cb36-20"><a href="#cb36-20" aria-hidden="true" tabindex="-1"></a>yσ²_train <span class="op">=</span> <span class="fu">var</span>(fₓ_pred_train)  <span class="co"># variance is diagonal of resulting covariance matrix</span></span>
+<span id="cb36-21"><a href="#cb36-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-22"><a href="#cb36-22" aria-hidden="true" tabindex="-1"></a>fₓ_pred_test <span class="op">=</span> <span class="fu">p_fₓ</span>(Tables.<span class="fu">matrix</span>(Xtest)<span class="ch">')</span></span>
+<span id="cb36-23"><a href="#cb36-23" aria-hidden="true" tabindex="-1"></a>ypred_test <span class="op">=</span> <span class="fu">mean</span>(fₓ_pred_test)</span>
+<span id="cb36-24"><a href="#cb36-24" aria-hidden="true" tabindex="-1"></a>yσ²_test <span class="op">=</span> <span class="fu">var</span>(fₓ_pred_test)  <span class="co"># variance is diagonal of resulting covariance matrix</span></span>
+<span id="cb36-25"><a href="#cb36-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-26"><a href="#cb36-26" aria-hidden="true" tabindex="-1"></a>pf1 <span class="op">=</span> <span class="fu">scatter</span>(ypred_train, ytrain, label<span class="op">=</span><span class="st">"training data"</span>)</span>
+<span id="cb36-27"><a href="#cb36-27" aria-hidden="true" tabindex="-1"></a><span class="fu">scatter!</span>(ypred_test, ytest, label<span class="op">=</span><span class="st">"testing data"</span>)</span>
+<span id="cb36-28"><a href="#cb36-28" aria-hidden="true" tabindex="-1"></a><span class="fu">title!</span>(<span class="st">"Fit with guessed parameters"</span>)</span>
+<span id="cb36-29"><a href="#cb36-29" aria-hidden="true" tabindex="-1"></a></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display" data-execution_count="162">
+<p><img src="gaussian_process_regression_overview_files/figure-html/cell-24-output-1.svg" class="img-fluid"></p>
+</div>
+</div>
+<p>we need a way to intelligently initialize the outputs. See <a href="https://infallible-thompson-49de36.netlify.app/">this post</a> for ideas</p>
+<div class="cell" data-execution_count="163">
+<div class="sourceCode cell-code" id="cb37"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>θ_lower <span class="op">=</span> [<span class="fl">1e-5</span>, <span class="fl">1e-5</span>, <span class="fl">1e-5</span>]</span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a>θ_upper <span class="op">=</span> [<span class="cn">Inf</span>, <span class="cn">Inf</span>, <span class="cn">Inf</span>]</span>
+<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a>θ₀ <span class="op">=</span> [<span class="fl">0.25</span>, <span class="fl">0.3</span>, <span class="fl">0.25</span>]</span>
+<span id="cb37-5"><a href="#cb37-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-6"><a href="#cb37-6" aria-hidden="true" tabindex="-1"></a><span class="co"># define loss function</span></span>
+<span id="cb37-7"><a href="#cb37-7" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">loss_function</span>(x,y)</span>
+<span id="cb37-8"><a href="#cb37-8" aria-hidden="true" tabindex="-1"></a>    <span class="kw">function</span> <span class="fu">negativelogmarginallikelihood</span>(params)</span>
+<span id="cb37-9"><a href="#cb37-9" aria-hidden="true" tabindex="-1"></a>        kernel <span class="op">=</span> params[<span class="fl">1</span>] <span class="op">*</span> (<span class="fu">SqExponentialKernel</span>() <span class="op">∘</span> <span class="fu">ScaleTransform</span>(params[<span class="fl">2</span>]))</span>
+<span id="cb37-10"><a href="#cb37-10" aria-hidden="true" tabindex="-1"></a>         f <span class="op">=</span> <span class="fu">GP</span>(kernel)</span>
+<span id="cb37-11"><a href="#cb37-11" aria-hidden="true" tabindex="-1"></a>        fx <span class="op">=</span> <span class="fu">f</span>(x, params[<span class="fl">3</span>])</span>
+<span id="cb37-12"><a href="#cb37-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="fu">-logpdf</span>(fx, y)</span>
+<span id="cb37-13"><a href="#cb37-13" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span></span>
+<span id="cb37-14"><a href="#cb37-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> negativelogmarginallikelihood</span>
+<span id="cb37-15"><a href="#cb37-15" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb37-16"><a href="#cb37-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-17"><a href="#cb37-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-18"><a href="#cb37-18" aria-hidden="true" tabindex="-1"></a><span class="co"># default option uses finite diff methods</span></span>
+<span id="cb37-19"><a href="#cb37-19" aria-hidden="true" tabindex="-1"></a>opt <span class="op">=</span> Optim.<span class="fu">optimize</span>(<span class="fu">loss_function</span>(Tables.<span class="fu">matrix</span>(Xtrain)<span class="ch">', ytrain), θ_lower, θ_upper, θ₀, Fminbox(LBFGS()); autodiff=:forward)  </span></span>
+<span id="cb37-20"><a href="#cb37-20" aria-hidden="true" tabindex="-1"></a>params_best <span class="op">=</span> opt.minimizer</span>
+<span id="cb37-21"><a href="#cb37-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-22"><a href="#cb37-22" aria-hidden="true" tabindex="-1"></a><span class="co"># softplus.(params_best)</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display" data-execution_count="163">
+<pre><code>3-element Vector{Float64}:
+ 7.44878713782739
+ 1.062150755934373
+ 1.0000000000000003e-5</code></pre>
+</div>
+</div>
+<div class="cell" data-execution_count="165">
+<div class="sourceCode cell-code" id="cb39"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a>kernel_best <span class="op">=</span> params_best[<span class="fl">1</span>] <span class="op">*</span> (<span class="fu">SqExponentialKernel</span>() <span class="op">∘</span> <span class="fu">ScaleTransform</span>(params_best[<span class="fl">2</span>]))</span>
+<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a>f <span class="op">=</span> <span class="fu">GP</span>(kernel_best)</span>
+<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb39-4"><a href="#cb39-4" aria-hidden="true" tabindex="-1"></a>fₓ <span class="op">=</span> <span class="fu">f</span>(Tables.<span class="fu">matrix</span>(Xtrain)<span class="ch">', params_best[3])</span></span>
+<span id="cb39-5"><a href="#cb39-5" aria-hidden="true" tabindex="-1"></a>p_fₓ <span class="op">=</span> <span class="fu">posterior</span>(fₓ, ytrain)</span>
+<span id="cb39-6"><a href="#cb39-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb39-7"><a href="#cb39-7" aria-hidden="true" tabindex="-1"></a><span class="co"># compute </span></span>
+<span id="cb39-8"><a href="#cb39-8" aria-hidden="true" tabindex="-1"></a>fₓ_pred <span class="op">=</span> <span class="fu">p_fₓ</span>(Tables.<span class="fu">matrix</span>(Xtest)<span class="ch">')</span></span>
+<span id="cb39-9"><a href="#cb39-9" aria-hidden="true" tabindex="-1"></a>p_pred <span class="op">=</span> <span class="fu">marginals</span>(fₓ_pred)</span>
+<span id="cb39-10"><a href="#cb39-10" aria-hidden="true" tabindex="-1"></a>y_pred <span class="op">=</span> <span class="fu">mean</span>.(p_pred);</span>
+<span id="cb39-11"><a href="#cb39-11" aria-hidden="true" tabindex="-1"></a>y_σ <span class="op">=</span> <span class="fu">std</span>.(p_pred);</span>
+<span id="cb39-12"><a href="#cb39-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb39-13"><a href="#cb39-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb39-14"><a href="#cb39-14" aria-hidden="true" tabindex="-1"></a>fₓ_pred_train <span class="op">=</span> <span class="fu">p_fₓ</span>(Tables.<span class="fu">matrix</span>(Xtrain)<span class="ch">')</span></span>
+<span id="cb39-15"><a href="#cb39-15" aria-hidden="true" tabindex="-1"></a>ypred_train <span class="op">=</span> <span class="fu">mean</span>(fₓ_pred_train)</span>
+<span id="cb39-16"><a href="#cb39-16" aria-hidden="true" tabindex="-1"></a>yσ²_train <span class="op">=</span> <span class="fu">var</span>(fₓ_pred_train)  <span class="co"># variance is diagonal of resulting covariance matrix</span></span>
+<span id="cb39-17"><a href="#cb39-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb39-18"><a href="#cb39-18" aria-hidden="true" tabindex="-1"></a>fₓ_pred_test <span class="op">=</span> <span class="fu">p_fₓ</span>(Tables.<span class="fu">matrix</span>(Xtest)<span class="ch">')</span></span>
+<span id="cb39-19"><a href="#cb39-19" aria-hidden="true" tabindex="-1"></a>ypred_test <span class="op">=</span> <span class="fu">mean</span>(fₓ_pred_test)</span>
+<span id="cb39-20"><a href="#cb39-20" aria-hidden="true" tabindex="-1"></a>yσ²_test <span class="op">=</span> <span class="fu">var</span>(fₓ_pred_test)  <span class="co"># variance is diagonal of resulting covariance matrix</span></span>
+<span id="cb39-21"><a href="#cb39-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb39-22"><a href="#cb39-22" aria-hidden="true" tabindex="-1"></a>pf2 <span class="op">=</span> <span class="fu">scatter</span>(ypred_train, ytrain, label<span class="op">=</span><span class="st">"training data"</span>)</span>
+<span id="cb39-23"><a href="#cb39-23" aria-hidden="true" tabindex="-1"></a><span class="fu">scatter!</span>(ypred_test, ytest, label<span class="op">=</span><span class="st">"testing data"</span>)</span>
+<span id="cb39-24"><a href="#cb39-24" aria-hidden="true" tabindex="-1"></a><span class="fu">title!</span>(<span class="st">"Fit with HPO Parameters"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display" data-execution_count="165">
+<p><img src="gaussian_process_regression_overview_files/figure-html/cell-26-output-1.svg" class="img-fluid"></p>
 </div>
 </div>
 </section>
