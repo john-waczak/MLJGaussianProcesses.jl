@@ -51,7 +51,7 @@ uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
 
-[[deps.MLJGP]]
+[[deps.MLJGaussianProcesses]]
 path = ".."
 uuid = "e2c51686-8c13-4540-892e-18cf079a7e1a"
 version = "0.1.0"

@@ -2,13 +2,13 @@
 CurrentModule = MLJGP
 ```
 
-# MLJGP
+# MLJGaussianProcesses
 
-Documentation for [MLJGP](https://github.com/john-waczak/MLJGP.jl).
+Documentation for [MLJGaussianProcesses](https://github.com/john-waczak/MLJGaussianProcesses.jl).
 
 ```@index
 ```
 
 ```@autodocs
-Modules = [MLJGP]
+Modules = [MLJGaussianProcesses]
 ```

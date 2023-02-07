@@ -1,4 +1,4 @@
-name = "MLJGP"
+name = "MLJGaussianProcesses"
 uuid = "e2c51686-8c13-4540-892e-18cf079a7e1a"
 authors = ["John Waczak <john.louis.waczak@gmail.com>"]
 version = "0.1.0"

@@ -1,4 +1,4 @@
-using MLJGP
+using MLJGaussianProcesses
 using Test
 using KernelFunctions
 using ParameterHandling
@@ -20,7 +20,7 @@ end
 
 
 
-@testset "MLJ" begin
+@testset "MLJ interface" begin
 
     X, y = make_regression(100, 3, rng=stable_rng());
 

@@ -1,4 +1,4 @@
-module MLJGP
+module MLJGaussianProcesses
 
 # for building GPs
 using Random
@@ -20,7 +20,7 @@ import Random.GLOBAL_RNG
 
 ## CONSTANTS
 const MMI = MLJModelInterface
-const PKG = "MLJGP"
+const PKG = "MLJGaussianProcesses"
 
 
 
@@ -145,9 +145,9 @@ end
 
 
 MMI.metadata_pkg.(GPR,
-                  name = "MLJGP",
+                  name = "MLJGaussianProcesses",
                   uuid = "e2c51686-8c13-4540-892e-18cf079a7e1a", # see your Project.toml
-                  url  = "https://github.com/john-waczak/MLJGP.jl",  # URL to your package repo
+                  url  = "https://github.com/john-waczak/MLJGaussianProcesses.jl",  # URL to your package repo
                   julia = true,          # is it written entirely in Julia?
                   license = "MIT",       # your package license
                   is_wrapper = false,    # does it wrap around some other package?
@@ -173,7 +173,7 @@ const DOC_GPR = "[Gaussian Process Regression](https://gaussianprocess.org/gpml/
 
 """
 $(MMI.doc_header(GPR))
-MLJGPR implements $(DOC_GPR), a non-parametric, non-linear regression model for supervised machine learning utilizing tools from the [JuliaGaussianProcesses](https://juliagaussianprocesses.github.io/) organization.
+MLJGaussianProcesses implements $(DOC_GPR), a non-parametric, non-linear regression model for supervised machine learning utilizing tools from the [JuliaGaussianProcesses](https://juliagaussianprocesses.github.io/) organization.
 # Training data
 In MLJ or MLJBase, bind an instance `model` to data with
     mach = machine(model, X, y)
@@ -205,7 +205,7 @@ The fields of `report(mach)` are:
 # Examples
 ```
 using MLJ
-gpr = @load GPR pkg=MLJGP
+gpr = @load GPR pkg=MLJGaussianProcesses
 model = gpr()
 X, y = make_regression(50, 3) # synthetic data
 mach = machine(model, X, y) |> fit!

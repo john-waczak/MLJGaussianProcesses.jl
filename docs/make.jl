@@ -1,16 +1,16 @@
-using MLJGP
+using MLJGaussianProcesses
 using Documenter
 
-DocMeta.setdocmeta!(MLJGP, :DocTestSetup, :(using MLJGP); recursive=true)
+DocMeta.setdocmeta!(MLJGaussianProcesses, :DocTestSetup, :(using MLJGaussianProcesses); recursive=true)
 
 makedocs(;
-    modules=[MLJGP],
+    modules=[MLJGaussianProcesses],
     authors="John Waczak <john.louis.waczak@gmail.com>",
-    repo="https://github.com/john-waczak/MLJGP.jl/blob/{commit}{path}#{line}",
-    sitename="MLJGP.jl",
+    repo="https://github.com/john-waczak/MLJGaussianProcesses.jl/blob/{commit}{path}#{line}",
+    sitename="MLJGaussianProcesses.jl",
     format=Documenter.HTML(;
         prettyurls=get(ENV, "CI", "false") == "true",
-        canonical="https://john-waczak.github.io/MLJGP.jl",
+        canonical="https://john-waczak.github.io/MLJGaussianProcesses.jl",
         edit_link="main",
         assets=String[],
     ),
@@ -20,6 +20,6 @@ makedocs(;
 )
 
 deploydocs(;
-    repo="github.com/john-waczak/MLJGP.jl",
+    repo="github.com/john-waczak/MLJGaussianProcesses.jl",
     devbranch="main",
 )
