@@ -1,5 +1,5 @@
 ```@meta
-CurrentModule = MLJGP
+CurrentModule = MLJGaussianProcesses
 ```
 
 # MLJGaussianProcesses
