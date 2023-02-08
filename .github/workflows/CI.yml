@@ -50,6 +50,6 @@ jobs:
       - run: |
           julia --project=docs -e '
             using Documenter: DocMeta, doctest
-            using MLJGP
-            DocMeta.setdocmeta!(MLJGP, :DocTestSetup, :(using MLJGP); recursive=true)
-            doctest(MLJGP)'
+            using MLJGaussianProcesses
+            DocMeta.setdocmeta!(MLJGaussianProcesses, :DocTestSetup, :(using MLJGaussianProcesses); recursive=true)
+            doctest(MLJGaussianProcesses)'
