@@ -7,4 +7,5 @@
 
 MLJGaussianProcesses is a package for using Gaussian Processes in MLJ! The plan is to build on top of code from the [`JuliaGPs` group](https://juliagaussianprocesses.github.io/).
 
+Adam says to say hello! 
 
