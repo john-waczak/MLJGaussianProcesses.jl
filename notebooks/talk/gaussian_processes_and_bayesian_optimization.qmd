@@ -1,0 +1,741 @@
+---
+title: "Gaussian Processes"
+subtitle: "Nonlinear, nonparametric regression and optimmization of expensive black-box functions"
+author: "John Waczak" 
+date: today
+format:
+  revealjs: 
+    slide-number: true
+    preview-links: auto
+    width: 1200
+    margin: 0.05
+   
+execute: 
+    echo: true 
+    output: true 
+jupyter: julia-1.8
+---
+
+```{julia}
+|# echo: false
+|# output: false
+using Pkg 
+Pkg.activate(".")
+```
+
+
+```{julia}
+|# echo: false
+|# output: false
+using Random
+using Plots 
+using Tables
+using LinearAlgebra, Distributions, Statistics
+using AbstractGPs, KernelFunctions
+using MLJ, MLJGaussianProcesses
+```
+
+
+
+
+## Overview
+
+::: {.incremental}
+:::: {.columns} 
+::: {.column width="40%"}
+
+1. Linear Regression
+2. Making it Bayesian
+3. Feature Mappings
+4. Bayesian Regression
+5. Kernelization
+
+:::
+::: {.column width="40%"}
+
+6. The Function-space View
+7. Gaussian Processes
+8. Doing it in Julia
+9. Bayesian model selection
+10. Bayesian Optimization
+
+:::
+::::
+:::
+
+
+# Linear Regression 
+
+##
+
+**Problem**: Given a dataset $\mathscr{D} = \Big\{ (\mathbf{x}_i, y_i) \;\Big\vert \; i = 1,...,n\Big\}$, how can we determine the *line (hyperplane) of best fit*?
+
+:::: {.columns} 
+::: {.column width="40%"}
+
+- $\mathbf{x}_i \in \mathbb{R}^D$ is the $i^{th}$ input (feature) vector
+- $y_i\in\mathbb{R}$ is the $i^{th}$ target
+
+:::
+
+::: {.column width="50%"}
+
+```{julia}
+#| echo: false
+
+X = rand(200)
+y = 0.3 .* X .+ 0.25 .* (rand(200) .- 0.5)
+X = X'
+
+p = plot(X', y, 
+    seriestype=:scatter,
+    color=:red,
+    alpha=0.75, 
+    label="data",
+    xlabel="x",
+    ylabel="y",
+    xguidefontsize=20,
+    yguidefontsize=20,
+    size=(500,400),
+    )
+```
+
+:::
+::::
+
+
+##
+
+**Answer**: Linear regression is best understood in terms of *Linear Algebra*. We collect our dataset into a $D \times n$ dimensional [**Design Matrix**](https://en.wikipedia.org/wiki/Design_matrix) so that
+
+\begin{equation}
+    X := \begin{pmatrix}
+    \vdots & \vdots & & \vdots \\
+    \mathbf{x}_1 & \mathbf{x}_2 & ... & \mathbf{x}_n \\
+    \vdots & \vdots & & \vdots
+    \end{pmatrix}
+\end{equation}
+
+and our targets into a target vector
+
+\begin{equation}
+    \mathbf{y} := (y_1, ..., y_n)
+\end{equation}
+
+## 
+
+A linear regression model is then a function of the form
+\begin{equation}
+    f(\mathbf{x}) = \mathbf{x}^T\mathbf{w}
+\end{equation}
+where $\mathbf{w}$ is the $D$-dimensional vector of weights. By minimizing the mean-squared-error between our model and targets, one can show that the optimal weights are given by the **Normal Equations**
+\begin{equation}
+        XX^T \mathbf{w} = X\mathbf{y}
+\end{equation}
+
+
+## 
+:::: {.columns} 
+::: {.column width="40%"}
+In Julia:
+```{julia}
+#| echo: true
+#| output: false
+w = (X*X')\(X*y)
+ypred = X'*w
+```
+
+::: 
+::: {.column width="60%"}
+
+```{julia}
+#| echo: false
+plot!(p, X', ypred, color=:blue, label="fit")
+xlabel!("x")
+ylabel!("y")
+title!("Linear Regression in 1-Dimension")
+
+```
+:::
+::::
+
+
+# Making it Bayesian
+
+## 
+
+
+Standard linear regression assumes that out data $\mathscr{D}$ are perfect, but we can clearly see that the above data are noisy. To account for this, we need to make our model *Bayesian* by augmenting it to consider measurement error. We define
+\begin{align}
+    f(\mathbf{x}) &= \mathbf{x}^T\mathbf{w} \\ 
+    \mathbf{y} &= f(\mathbf{x}) + \mathbf{\epsilon} \\ 
+    \mathbf{\epsilon} &\sim \mathscr{N}(0, \sigma_n^2)
+\end{align}
+or, in words, our observed values differ from the *truth* by identically, independently, distributed Gaussian noise with mean $0$ and variance $\sigma_n^2$. 
+
+## 
+
+*Is the measurement noise really Gaussian?*
+
+**Not always.** The assumption that the noise is i.i.d. Gaussian is *useful* because it allows us to simplify the *likelihood* function by separating out each individual contribution by our datapoints: 
+\begin{align} 
+    p(\mathbf{y}\vert X,\mathbf{w}) &= \prod\limits_i^n p(\mathbf{y}_i \vert \mathbf{x}_i, \mathbf{w}) \\
+    &= \prod\limits_i^n \frac{1}{\sqrt{2\pi\sigma_n^2}}\exp\left( -\dfrac{(\mathbf{y}_i-\mathbf{x}_i^T\mathbf{w})^2}{2\sigma_n^2}\right)\\
+    &= \mathscr{N}\left(X^T\mathbf{w}, \sigma_n^2I\right)
+\end{align} 
+
+##
+
+To perform inference with this updated model, we apply Baye's Rule, that is: 
+
+\begin{equation}
+    p(\mathbf{w}\vert \mathbf{y}, X) = \dfrac{p(\mathbf{y}\vert X, \mathbf{w})p(\mathbf{w})}{p(\mathbf{y}\vert X)}
+\end{equation}
+where 
+
+- $p(\mathbf{w}\vert \mathbf{y}, X)$ is the **posterior distribution** 
+- $p(\mathbf{y}\vert X, \mathbf{w})$ is the **likelihood**
+- $p(\mathbf{w})$ is the **prior distribution**
+- $p(\mathbf{y} \vert X)$ is the **marginal likelihood**, i.e. the normalization constant
+
+
+## 
+If we make the humble assumption that $p(\mathbf{w})=\mathscr{N}(0, \Sigma_p)$, then some brow furrowing leads to the convenient result: 
+\begin{align}
+    p(\mathbf{w}\vert\mathbf{y},X) &= \mathscr{N}\left( \bar{\mathbf{w}}=\frac{1}{\sigma_n^2}A^{-1}X\mathbf{y}, \Sigma=A^{-1}\right) \\ 
+    A &= \frac{1}{\sigma_n^2}XX^T+\Sigma_p^{-1}
+\end{align}
+
+I.e. a distribution over all possible model weights. 
+
+
+## 
+
+To use this distribution to make predictions, consider a newly supplied testpoint $\mathbf{x}_*$. We want to find 
+\begin{equation}
+    p(y_* \vert \mathbf{x}_*, \mathbf{y}, X) 
+\end{equation}
+
+We do this by marginalizing over our weight distribution, i.e. 
+\begin{equation}
+    p(y_* \vert \mathbf{x}_*, \mathbf{y}, X) = \int_{\mathbf{w}} p(y_*\vert \mathbf{x}_*,\mathbf{w})p(\mathbf{w}\vert \mathbf{y}, X)d\mathbf{w}
+\end{equation}
+
+Again, we find the product of two Gaussians. The resulting predictive distribution is: 
+\begin{equation}
+    \boxed{p(y_* \vert \mathbf{x}_*, \mathbf{y}, X) = \mathscr{N}\left(\mathbf{x}_*^T\mathbf{\bar{w}},\;  \mathbf{x}_*^TA^{-1}\mathbf{x}_*\right)}
+\end{equation}
+
+
+## 
+
+Great... now we can fit linear models with estimates for our uncertainty. But many (most?) *interesting* relationships are nonlinear. Can we extend this method further? 
+
+
+# Feature Mappings
+
+## 
+
+
+In the parlance of machine learning, the simple solution is to do [**feature engineering**](https://en.wikipedia.org/wiki/Feature_engineering). If our inital feature vector is 
+\begin{equation}
+    \mathbf{x} = (x_1, ..., x_n) 
+\end{equation}
+we can use our *expertise* to concot new combinations of these features to produce the agumented vector 
+\begin{equation}
+    \mathbf{\tilde{x}} = (x_1, ..., x_n, x_1^2, \;sin(x_2), \;x_5x_7/x_4,\;...) 
+\end{equation}
+
+## 
+
+Constructing new features is often more art than science. To standardize the process, let's abstract mapping from the original feature vector $\mathbf{x}$ to the augmented vector $\mathbf{\tilde{x}}$. This is accomplished via the projection map $\phi:\mathbb{R}^D \to \mathbb{R}^N$ where
+\begin{equation}
+    \mathbf{x} \mapsto \mathbf{\tilde{x}} = \phi(\mathbf{x})
+\end{equation}
+
+The result is that our linear model updates to become 
+\begin{equation}
+    f(\mathbf{x}) := \phi(\mathbf{x})^T\mathbf{w}
+\end{equation}
+where the weight vector has gone from $D$ dimensional to $N$ dimensional. 
+
+##
+
+Similarly, the normal equations for $\mathbf{w}$ update to become 
+\begin{equation}
+    \mathbf{w} = (\Phi\Phi^T)^{-1}\Phi\mathbf{y}
+\end{equation}
+where $\Phi = \phi(X)$ is the $N\times n$ matrix resulting from applying $\phi$ columnwise to $X$. 
+
+The following example shows how to use such a mapping to produce a quadratic polynomial fit. 
+
+##
+
+:::: {.columns} 
+::: {.column width="50%"}
+In Julia:
+```{julia}
+#| echo: true
+#| output: false
+# generate noisy quadratic data
+X = 2*rand(200)
+y =  1.0 .- 2.0 .* X .+ X.^2 .+ (0.5 .* rand(200))
+X = X'
+
+# compute projection
+Φ(x) = [1.0, x...,[x[i]*x[j] for i∈1:size(x,1) for j∈1:size(x,1)]...]
+X̃ = hcat([Φ(col) for col ∈ eachcol(X)]...)
+
+# fit the parameters
+w = (X̃*X̃')\(X̃*y)
+
+# compute projection on test points
+Xpred = collect(0:0.025:2)
+Xpred = Xpred'
+X̃pred = hcat([Φ(col) for col ∈ eachcol(Xpred)]...)
+
+# compute prediction on test points
+ypred = X̃pred'*w
+```
+
+::: 
+::: {.column width="50%"}
+
+```{julia}
+#| echo: false
+# visualize
+plot(X', y, 
+    seriestype=:scatter,
+    color=:red, alpha=0.25, 
+    size=(500,400),
+    label="data")
+
+plot!(Xpred', ypred, color=:blue, label="fit")
+xlabel!("x")
+ylabel!("y")
+title!("equation fit: $(round(w[1],digits=2)) + $(round(w[2], digits=2))x + $(round(w[3], digits=2))x²")
+```
+:::
+::::
+
+
+
+
+# Bayesian Regression
+
+## 
+
+How do we take our expanded notion of linear regression and apply our Bayesian framework?
+
+Simple: Let $\Phi := \phi(X)$, and replace $X\mapsto \Phi$ everywhere in our expressions.
+
+Our predictive distribution therefore becomes
+\begin{align}
+    p(y_* \vert \mathbf{x}_*, X, \mathbf{y}) &= \mathscr{N}\left(\frac{1}{\sigma_n^2}\phi_*^TA^{-1}\Phi\mathbf{y}, \;\phi_*^TA^{-1}\phi_*\right) \\ 
+    A &= \frac{1}{\sigma_n^2}\Phi\Phi^T + \Sigma_p^{-1}
+\end{align}
+Great! Now we can do our Bayesian inference with non-linear features given by $\phi$.
+
+
+## 
+
+There is one key drawback of this approach... As we expand the size of our basis, the matrix $\Phi$ grows prohibitively large! 
+
+To sneak around this problem, let's consider a reparametrization of our predictive distribution. Defining $K:= \Phi^T\Sigma_p\Phi$, one can derive the the equivalent form for our predictive distribution: 
+\begin{equation}
+    \boxed{p(y_*\vert \mathbf{x}_*, X, \mathbf{y}) =\\ \mathscr{N}\left( \phi_*^T\Sigma_p\Phi(K+\sigma_n^2I)^{-1}\mathbf{y}, \; \phi_*^T\Sigma_p\phi_* - \phi_*^T\Sigma_p\Phi(K+\sigma_n^2I)^{-1}\Phi^T\Sigma_p\phi_*\right)}
+\end{equation}
+where the pesky $N\times N$ term has been replaced by the $n\times n$ matrix $\Phi^T\Sigma_p\Phi$.
+
+
+# Kernelization
+
+## 
+
+We now make the the *key* observation that the only matrices that appear in the above expression are 
+\begin{align}
+    &\Phi^T\Sigma_p\Phi, &\phi_*^T\Sigma_p\phi_* \\ 
+    &\phi_*^T\Sigma_p\Phi, &\Phi^T\Sigma_p\phi_*
+\end{align}
+whose matrix elements we can write abstractly as 
+\begin{equation}
+    \phi(\mathbf{x})^T\Sigma_p\phi(\mathbf{x}')
+\end{equation}
+
+(what kind of operation does this look like?)
+
+
+## 
+
+This matrix product is a quadratic form which we can think of as representing an inner product on our transformed vectors!
+\begin{equation}
+    K_{ij} = k(\mathbf{x}_i, \mathbf{x}_j) = \langle \phi(\mathbf{x}_i), \phi(\mathbf{x}_j)\rangle
+\end{equation}
+We call the function $k(\mathbf{x},\mathbf{x}')$ the **kernel function** or the *covariance function*.  
+
+All we need to perform the above calculations are the matrix elements of K on our data $\mathscr{D}$ and any test points $\mathbf{x}_*$ we wish to apply our model to. In effect, this means we are free to use feature vectors [**of any dimension, including $\infty$**](https://www.youtube.com/watch?v=XUj5JbQihlU&t=25m53s).[^2]
+
+[^2]: The idea here is that ther kernel vunction represents an inner product over *some* vector space. As it turns out, the RBF kernel corresponds to a an [infinite dimensional feature vector](https://math.stackexchange.com/questions/276707/why-does-a-radial-basis-function-kernel-imply-an-infinite-dimension-map).
+
+## 
+
+There are many choices for the kernel function. One of the most popular is the RBF (radial basis function) kernel, also known as the *squared exponential kernel*: 
+
+\begin{equation}
+    k_{\text{rbf}}(\mathbf{x}, \mathbf{x}') := \sigma_f^2\exp(-\frac{1}{2\ell^2}\lvert \mathbf{x}-\mathbf{x}'\rvert^2)
+\end{equation}
+
+where $\sigma_f^2$ is the *signal variance* and $\ell$ denotes the similarity length scale. 
+
+##
+
+For notational convenience, let's define 
+\begin{align}
+    K &:= k(X,X) \\ 
+    K_{**} &:= k(X_*, X_*) \\ 
+    K_{*} &:= k(X, X_*)
+\end{align}
+
+
+## 
+
+then, our predictive distribution takes the final, *clean* form
+\begin{equation}
+    \boxed{p(\mathbf{y}_* \vert X_*, X, \mathbf{y}) = \mathscr{N}\left( K_*^T(K+\sigma_n^2I)^{-1}\mathbf{y},\; K_{**}-K_{*}^T(K+\sigma_n^2I)^{-1}K_*\right)}
+\end{equation}
+
+This is the *end-result* of Gaussian Process Regression acheived via the *weight-space view*.
+
+
+# The Function-space View
+
+## 
+
+- So far our approach has been to generalize the standard linear regression model to allow for fitting over a (possibly infinite) basis of features *with* consideration for measurement and model uncertainty (our Bayesian priors). 
+- In essence, the idea was to fit *the distribution of all possible weights conditioned on the available training data*, $p(\mathbf{w} \vert X, \mathbf{y})$. 
+- A second *equivalent* approach is to instead consider the distribution of all possible model functions $f(\mathbf{x})$.
+
+
+# Gaussian Processes
+
+## 
+
+- By this point, we are all familiar with the Gaussian distribution, aka the Normal distribtion $\mathscr{N}(\mu, \sigma^2)$.
+- This distribution is defined by a mean value $\mu$ and a variance $\sigma^2$. 
+- It's *big brother* is the **Multivariate Normal Distribution**, $\mathscr{N}(\mu, \Sigma)$, described be a vector of means $\mu$ and a covariance matrix $\Sigma$. 
+- A natural question, then, is can we generalize the concept of the Gaussian distribution to spaces of functions?
+
+
+## 
+**Definition:** A *Gaussian Process*, $\mathscr{GP}$, is a collection of random variables for which any finite subset are described by a joint Gaussian distribution. 
+
+Because each finite subset of this continuous collection is jointly gaussian, we can completely specify a Gaussian Process with two functions: the mean function $m(\mathbf{x})$ and the covariance function $k(\mathbf{x},\mathbf{x}')$. To denote this, we typically write
+\begin{equation}
+    f(\mathbf{x}) \sim \mathscr{GP}(m(\mathbf{x}), k(\mathbf{x},\mathbf{x}'))
+\end{equation}
+
+
+## Prediction with Gaussian Processes
+
+Subsets of our Gaussian Process are jointly Gaussian distributed... therefore: 
+
+\begin{equation}\begin{bmatrix} \mathbf{f} \\ \mathbf{f}_* \end{bmatrix} \sim \mathscr{N}\left(\mathbf{0},\begin{bmatrix} K(X,X)-\sigma_n^2I & K(X,X_*) \\ K(X_*,X) & K(X_*,X_*) \end{bmatrix}\right)
+\end{equation}
+
+which leads to the predictive distribution
+\begin{equation}
+    \boxed{p(\mathbf{f}_* \vert X_*, X, \mathbf{y}) = \mathscr{N}\left( K_*^T\left[K + \sigma_n^2 I\right]^{-1}\mathbf{f},\; K_{**}-K_*^T\left[K + \sigma_n^2 I\right]^{-1}K_*\right)}
+\end{equation}
+
+
+# Doing it in Julia
+
+## 
+
+```{julia}
+#| output: false
+
+# Make training set
+
+function make_training_data(n, ν)
+    xs = reshape(collect(range(0.0, stop=1.0, length=500)), (1,500))
+    
+    y(x) = (exp(-x/(0.5)^2) * sin(2π*ν*x)) + (0.3)^2*(rand()-0.5)  # this one has some noise
+    ytruth(x) = (exp(-x/(0.5)^2) * sin(2π*ν*x)) 
+   
+    X = Tables.table(rand(1,n)', header=[:x])
+    Xtrue = Tables.table(xs', header=[:x])
+    
+    y = y.(X.x)
+    ytrue = ytruth.(Xtrue.x)
+    
+    return X, y, Xtrue, ytrue
+end
+
+X, y, Xtrue, ytrue = make_training_data(50, 10)
+
+p = scatter(X.x, y, color=:red, label="noisy data")
+plot!(Xtrue.x, ytrue, color=:blue, label="true function")
+xlabel!("x")
+ylabel!("y")
+```
+
+## 
+
+```{julia}
+display(p)
+```
+
+## 
+
+[`KernelFunctions.jl`](https://juliagaussianprocesses.github.io/KernelFunctions.jl/dev/userguide/) provides a clean interface to create various kernelfunctions and apply them to data to create our matrices `K`.
+
+Due to the fact that kernel functions obey composition laws, we can easily build up complicated Kernels from basic pieces via function composition with $\circ$
+
+##
+
+```{julia}
+#| output: false
+
+# create kernel function
+
+ℓ = 0.1  # length scale parameter
+k = 1.0  * (SqExponentialKernel() ∘ ScaleTransform(1/2ℓ^2))
+
+# test out kernels interface by generating matrix from k
+K = kernelmatrix(k, Tables.matrix(X)')  # transpose as we want size (n_features, n_datapoints)
+
+p = heatmap(K, yflip=true)
+```
+
+## 
+
+```{julia}
+display(p)
+```
+##
+
+Unsurprisingly, there is a lot of activation on the diagonal as for a single datapoint $\mathbf{x}$, we have 
+\begin{equation}
+    k(\mathbf{x},\mathbf{x}) = \exp\left(-\frac{0}{2\ell^2} \right) = 1.0
+\end{equation}
+
+Now that we have our Kernel function, let's construct our Gaussian Process. 
+
+##
+
+[`AbstractGPs.jl`](https://juliagaussianprocesses.github.io/AbstractGPs.jl/dev/) provides an excellent way to define Gaussian Processes by supplying mean and kernel functions. We can then sample from our GPs with a simple interface designed to extend the basic functions from `Statistics.jl`. From an `AbstractGP` we can construct a `FiniteGP` by *indexing* into our datasets.
+
+First we construct $f\sim\mathscr{GP}(0, k(\cdot, \cdot))$
+
+```{julia}
+# construct an AbstractGP with mean 0 and cov k(x,x')
+f = GP(0, k)
+```
+
+##
+
+From this `AbstractGP`, we can now construct a *FiniteGP*, i.e. a multivariate normal distribution by applying GP to our training data. We include a measurement variance of $\sigma^2 = 0.1$ to account for noisy observations
+
+```{julia}
+fₓ = f(Tables.matrix(X)', (0.1)^2)
+```
+
+##
+
+Next, we demonstrate how to compute the posterior Gaussian process (for us that would be $f_*$). First we create the finite gaussian process (a function) which we will use to compute the posterior distribution
+\begin{equation}
+    p(\mathbf{f}_* \vert X_*, X, \mathbf{y})
+\end{equation}
+
+```{julia}
+p_fₓ = posterior(fₓ, y)
+println(typeof(p_fₓ))
+```
+
+
+## 
+
+Now that we have the distribution, we can form our predictions... This can be done a few different ways: 
+
+```{julia}
+fₓ_pred = p_fₓ(Tables.matrix(Xtrue)')
+ypred = mean(fₓ_pred)
+yσ² = var(fₓ_pred)  # variance is diagonal of resulting covariance matrix
+```
+
+
+##
+
+Alternatively, if we instead want a distribution for each datapoint we can compute 
+\begin{equation}
+    p(\mathbf{y}_x \vert \mathbf{x}_*, X, y)
+\end{equation}
+When treated as a collection, we can think about each of these representing a marginalized distribution over the test points $\mathbf{x}_*$ and hence, we call `marginals()`
+
+```{julia}
+p_pred = marginals(fₓ_pred)
+println(p_pred[1])
+
+y_pred = mean.(p_pred);
+y_σ = std.(p_pred);
+```
+
+## 
+
+```{julia}
+p1 = plot(X.x, y, seriestype=:scatter, color=:red, label="noisy data")
+plot!(Xtrue.x, ytrue, color=:black, linestyle=:dash, label="true function")
+plot!(Xtrue.x, y_pred, color=:blue, linewidth=3, label="fit" )
+plot!(Xtrue.x, y_pred .+ 2y_σ, c=:gray, label="")
+plot!(Xtrue.x, y_pred .- 2y_σ, fillrange = y_pred .+ 2y_σ, fillalpha=0.25, color=:gray, label="± 2σ")
+xlabel!("x")
+ylabel!("y")
+title!("Vanilla GPR")
+```
+
+## Summary: {.smaller} 
+
+So far we have seen how to: 
+
+1. Build a kernel function $k(\cdot, \cdot)$ via composition using `KernelFunctions.jl`
+2. Construct an a Gaussian Process $f\sim\mathscr{GP}$ abstractly using `AbstractGPs.jl`
+3. Construct a finite representation of our GP, $f_x$, over training data
+4. Construct a posterior Gaussian Process from $f_x$ and our training targets $\mathbf{y}$. 
+5. Construct a finite representation of the posterior GP applied to our prediction data (here `Xtrue`). 
+6. Sample this final distribution to obatin a prediction via `mean()` and variances via `var()`. Alternatively, we can obtain a multivariate normal distribution for each point by calling `marginals()`. 
+
+
+## Fitting the Gaussian Process
+
+You may think we have *already* fit the Guassian process however, we were forced to choose values for both $\ell$ and $\sigma^2$. How can we optimally select the ideal hyperparameters for our Gaussian Process?
+
+This leads us into the realm of [Bayesian Model Selection](https://gaussianprocess.org/gpml/chapters/RW5.pdf)
+
+# Bayesian model selection
+
+##
+
+There are several levels of parameters in machine learning. At the lowest level, we have the model weights $\mathbf{w}$. Above that, we have model hyperparameters, $\theta$. At the top we have model structure $\mathscr{H}$. In our Bayesian framework, we can consider distributions defined at each of these levels. At the bottom, we have 
+\begin{equation}
+    p(\mathbf{w} \vert X, \mathbf{y}, \theta, \mathscr{H}_i) = \frac{p(\mathbf{y} \vert X, \mathbf{w}, \theta, \mathscr{H}_i) p(\mathbf{w}\vert \theta, \mathscr{H}_i) }{p(\mathbf{y}\vert X, \theta, \mathscr{H}_i)}
+\end{equation}
+
+## 
+
+The prior $p(\mathbf{w}\vert \theta, \mathscr{H}_i)$ encodes any knowledge we have about the parameters prior to seeing the data. The denominator is the *marginal likelihood* and is given by 
+\begin{equation}
+    p(\mathbf{y}\vert X, \theta, \mathscr{H}_i) = \int d\mathbf{w}\; p(\mathbf{y} \vert X, \mathbf{w}, \theta, \mathscr{H}_i)p(\mathbf{w}\vert \theta, \mathscr{H}_i)
+\end{equation}
+
+## 
+
+The next level up is to express the distribution of hyper-parameters $\theta$: 
+\begin{equation}
+    p(\theta \vert X, \mathbf{y}, \mathscr{H}_i) = \frac{p(\mathbf{y}\vert X, \theta, \mathscr{H}_i)p(\theta \vert \mathscr{H}_i)}{p(\mathbf{y}\vert X, \mathscr{H}_i)}
+\end{equation}
+Here $p(\theta \vert \mathscr{H}_i)$ is called the *hyper-prior*. Similarly, the normalization constant is given by 
+\begin{equation}
+    p(\mathbf{y}\vert X,\mathscr{H}_i) = \int d\theta \; p(\mathbf{y}\vert X, \theta, \mathscr{H}_i)p(\theta \vert \mathscr{H}_i)
+\end{equation}
+
+##
+
+Finally, at the top level we have the set of possible model structures $\{\mathscr{H}_i\}$. This leads to
+\begin{equation}
+    p(\mathscr{H}_i \vert X, \mathbf{y}) = \frac{p(\mathbf{y} \vert X, \mathscr{H}_i)p(\mathscr{H}_i)}{p(\mathbf{y}\vert X)}
+\end{equation}
+with normlization constant
+\begin{equation}
+ p(\mathbf{y}\vert X) = \sum_i p(\mathbf{y} \vert X, \mathscr{H}_i)p(\mathscr{H}_i)
+\end{equation}
+
+## 
+
+Depending on the model details, these integrals may be intractible to approximations or Monte Carlo methods. Since we rarely have sufficient knowledge to form a hyperparameter prior, one often attempts to maximize the marginal likelihood $p(\mathbf{y} \vert X, \theta, \mathscr{H}_i)$ with respect to the hyperparameters $\theta$ instead. This is known as Type II Maximium Likelihood Estimation. 
+
+In the case of Gaussian Process Regression, we are once again saved by the fact that every piece has a convenient functional from resulting in analytically tractible integrals for the marginal likelihood function. We find 
+\begin{equation}
+    \ln p(\mathbf{y}\vert X, \theta) = -\frac{1}{2}\mathbf{y}^T(K_f + \sigma_n^2 I)^{-1}\mathbf{y} - \frac{1}{2}\ln\lvert K_f + \sigma_n^2 I \rvert -\frac{n}{2}\ln(2\pi)
+\end{equation}
+
+## 
+
+```{julia}
+using Optim
+```
+
+```{julia}
+# helpuer functions to insure parameters are positive
+softplus(x) = log(1+exp(x))
+softplusinv(x) = log(exp(x)-1)
+```
+
+## 
+
+We want to maximize the log-marginal-likelihood and therefore want to minimize minus that quantitty:
+
+```{julia}
+# define loss function
+function loss_function(x,y)
+    function negativelogmarginallikelihood(params)
+        kernel = softplus(params[1]) * (SqExponentialKernel() ∘ ScaleTransform(softplus(params[2])))
+         f = GP(kernel)
+        fx = f(x, softplus(params[3]))
+        return -logpdf(fx, y)
+    end
+    return negativelogmarginallikelihood
+end
+```
+
+## 
+
+```{julia}
+# prefactor, length parameter, measurement variance
+θ₀ = [1.0, 1/(2ℓ^2), (0.25)^2]
+```
+
+##
+
+```{julia}
+# default option uses finite diff methods
+opt = Optim.optimize(loss_function(Tables.matrix(X)', y), θ₀, LBFGS(); autodiff=:forward)  
+params_best = opt.minimizer
+
+softplus.(params_best)
+```
+
+##
+
+```{julia}
+kernel_best = softplus(params_best[1]) * (SqExponentialKernel() ∘ ScaleTransform(softplus(params_best[2])))
+f = GP(kernel_best)
+
+fₓ = f(Tables.matrix(X)', softplus(params_best[3]))
+p_fₓ = posterior(fₓ, y)
+fₓ_pred = p_fₓ(Tables.matrix(Xtrue)')
+p_pred = marginals(fₓ_pred)
+y_pred = mean.(p_pred);
+y_σ = std.(p_pred);
+
+p2 = plot(X.x, y, seriestype=:scatter, color=:red, label="noisy data")
+plot!(Xtrue.x, ytrue, color=:black, linestyle=:dash, label="true function")
+plot!(Xtrue.x, y_pred, color=:blue, linewidth=3, label="fit" )
+plot!(Xtrue.x, y_pred .+ 2y_σ, c=:gray, label="")
+plot!(Xtrue.x, y_pred .- 2y_σ, fillrange = y_pred .+ 2y_σ, fillalpha=0.25, color=:gray, label="± 2σ")
+xlabel!("x")
+ylabel!("y")
+title!("HPO GPR")
+
+pfinal = plot(p1, p2, layout=(1,2), size=(900, 500), plot_title="Gaussian Process Regression Fits")
+```
+
+##
+
+```{julia}
+display(pfinal)
+```
+
+
+# Bayesian Optimization
+
