@@ -1,10 +1,13 @@
 using MLJGaussianProcesses
-using Test
-using KernelFunctions
-using ParameterHandling
+
+using AbstractGPs
 using Distributions
+using KernelFunctions
 using MLJBase
+using ParameterHandling
 using StableRNGs
+using StatisticalMeasures
+using Test
 
 
 stable_rng() = StableRNGs.StableRNG(1234)
@@ -18,7 +21,37 @@ stable_rng() = StableRNGs.StableRNG(1234)
 
 end
 
+@testset "default mean builders" begin
 
+    @testset "zero mean" begin
+        flat_θᵢ, unflatten = ParameterHandling.value_flatten(θ_default)
+        initial_params = unflatten(flat_θᵢ)
+        @test typeof(default_zero_mean(initial_params)) <: AbstractGPs.ZeroMean
+    end
+
+    @testset "constant mean" begin
+        θ_kernel = θ_default
+        θ_mean = (μ=1.0,)
+        flat_θᵢ, unflatten = ParameterHandling.value_flatten(merge(θ_kernel, θ_mean))
+        initial_params = unflatten(flat_θᵢ)
+        mean_function = default_const_mean(initial_params)
+        @test typeof(mean_function) <: AbstractGPs.ConstMean
+        @test mean_function.c == 1.0
+    end
+
+    @testset "linear mean" begin
+        θ_kernel = θ_default
+        θ_mean = (β=[0.5,0.5],μ=1.0)
+        flat_θᵢ, unflatten = ParameterHandling.value_flatten(merge(θ_kernel, θ_mean))
+        initial_params = unflatten(flat_θᵢ)
+        mean_function = default_linear_mean(initial_params)
+        @test typeof(mean_function) <: LinearMean
+        @test mean_function.β == [0.5,0.5]
+        @test mean_function.μ == 1.0
+        @test mean_vector(mean_function, ColVecs(ones(2,1)))[1] == 2.0
+    end
+
+end
 
 @testset "MLJ interface" begin
 

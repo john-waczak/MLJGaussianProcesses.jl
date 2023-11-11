@@ -22,11 +22,9 @@ import Random.GLOBAL_RNG
 const MMI = MLJModelInterface
 const PKG = "MLJGaussianProcesses"
 
-
-
 export θ_default
-export default_kernel
-
+export default_kernel, default_zero_mean, default_const_mean, default_linear_mean
+export LinearMean
 
 # -------------------------------------------------------------------------
 #         Kernel Building
@@ -39,32 +37,43 @@ function default_kernel(θ::NamedTuple)
     return  θ.σf²  * (SqExponentialKernel() ∘ ScaleTransform(1/2(θ.ℓ)^2))
 end
 
+# -------------------------------------------------------------------------
+#         Mean functions
+# -------------------------------------------------------------------------
+
+include("mean_functions.jl")
+
+# -------------------------------------------------------------------------
+#         GPR model definition
+# -------------------------------------------------------------------------
+
 # note: we need to figure out a reasonable way to do these constraints.
 MMI.@mlj_model mutable struct GPR <: MMI.Probabilistic
-    # μ::Union{Float64, Function} = 0.0  # can either pass a constant mean or a custom function
-    μ::Float64 = 0.0::(_ ≥ 0)
+    μ::Function = default_zero_mean
     k::Function = default_kernel
     θ_init::NamedTuple = θ_default
+    μ_init::Function = mean_function_initializer(μ, Random.GLOBAL_RNG)
     σ²::Float64 = 1e-6::(_ > 0)
     optimizer::Optim.AbstractOptimizer = LBFGS()
 end
 
 
-function MLJModelInterface.fit(gpr::GPR, verbosity, X, y)
+function MMI.fit(gpr::GPR, verbosity, X, y)
     Xmatrix = MMI.matrix(X)'  # make matrix p × n for efficiency
     nfeatures = size(Xmatrix, 1)
 
-    # augment θ_init to include σ²
-    θ_init_full = (gpr.θ_init..., σ²=positive(gpr.σ²))
+    # augment θ_init to include mean function params and σ²
+    θ_mean = gpr.μ_init(X, y)
+    θ_init_full = (gpr.θ_init..., θ_mean..., σ²=positive(gpr.σ²))
     flat_θᵢ, unflatten = ParameterHandling.value_flatten(θ_init_full)
 
     # define loss function as minus marginal log-likelihood
     function objective(θ::NamedTuple)
-        k = gpr.k(θ)  # rebuild kernel function with current params
-        f = GP(gpr.μ, k)   # build AbstractGP using our μ and k
-        fₓ = f(Xmatrix, θ.σ²)
-
-        return -logpdf(fₓ, y)  # return minus marginal log-likelihood
+        k = gpr.k(θ) # build kernel function with current params
+        μ = gpr.μ(θ) # build mean function with current params
+        f = GP(μ, k) # build AbstractGP using our μ and k
+        fₓ = f(Xmatrix, θ.σ²) # construct fintite GP at points in Xmatrix
+        return -logpdf(fₓ, y) # return minus marginal log-likelihood
     end
 
     # default option uses finite diff methods
@@ -90,7 +99,7 @@ function MLJModelInterface.fit(gpr::GPR, verbosity, X, y)
 
     θ_best = unflatten(opt.minimizer)
 
-    f = GP(gpr.μ, gpr.k(θ_best))
+    f = GP(gpr.μ(θ_best), gpr.k(θ_best))
     fₓ = f(Xmatrix, θ_best.σ²)
     p_fₓ = posterior(fₓ, y)  # <-- this is our fitresult as it let's us do everything we need
 
@@ -162,8 +171,6 @@ MMI.metadata_model(GPR,
                    descr   = "A simple interface to Gaussian Processes in MLJ with probabilistic outputs.",
                    load_path    = "$(PKG).GPR"
                    )
-
-
 
 # ------------ documentation ------------------------
 
