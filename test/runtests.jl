@@ -57,25 +57,30 @@ end
 
     X, y = make_regression(100, 3, rng=stable_rng());
 
-    gpr = GPR()
+    function test_gp(X, y, μ, k)
+        gpr = GPR(;μ, k)
 
-    m = machine(gpr, X, y)
-    res = fit!(m)
+        m = machine(gpr, X, y)
+        res = fit!(m)
 
-    rpt = report(m)
-    @test Set([:summary, :minimizer, :minimum, :iterations, :converged]) == Set(keys(rpt))
+        rpt = report(m)
+        @test Set([:summary, :minimizer, :minimum, :iterations, :converged]) == Set(keys(rpt))
 
-    fp = fitted_params(m)
-    @test Set([:θ_best, :σ²]) == Set(keys(fp))
+        fp = fitted_params(m)
+        @test Set([:θ_best, :σ²]) == Set(keys(fp))
 
 
-    p_y = predict(m, X)
-    ŷ = predict_mean(m, X)
-    @test typeof(p_y[1]) <: Distributions.Normal
-    r2 = rsq(y, ŷ)
-    @test isapprox(r2, 1.0, atol=0.00001)  #
+        p_y = predict(m, X)
+        ŷ = predict_mean(m, X)
+        @test typeof(p_y[1]) <: Distributions.Normal
+        r2 = rsq(y, ŷ)
+        @test isapprox(r2, 1.0, atol=0.00001)  #
 
-    y_mode = predict_mode(m, X)
-    @test all(ŷ .== y_mode)
+        y_mode = predict_mode(m, X)
+        @test all(ŷ .== y_mode)
+    end
 
+    test_gp(X, y, default_zero_mean, default_kernel)
+    test_gp(X, y, default_const_mean, default_kernel)
+    test_gp(X, y, default_linear_mean, default_kernel)
 end

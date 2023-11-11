@@ -10,8 +10,8 @@ struct LinearMean{coefType,meanType} <: AbstractGPs.MeanFunction
     μ::meanType
 end
 
-AbstractGPs.mean_vector(mf::LinearMean, vecs::ColVecs) = reshape(mf.β,1,:)*vecs.X .+ mf.μ
-AbstractGPs.mean_vector(mf::LinearMean, vecs::RowVecs) = vecs.X*reshape(mf.β,:,1) .+ mf.μ
+AbstractGPs.mean_vector(mf::LinearMean, vecs::ColVecs) = dropdims(reshape(mf.β,1,:)*vecs.X .+ mf.μ, dims=1)
+AbstractGPs.mean_vector(mf::LinearMean, vecs::RowVecs) = dropdims(vecs.X*reshape(mf.β,:,1) .+ mf.μ, dims=2)
 
 function default_linear_mean(θ)
     return LinearMean(θ.β, θ.μ)
@@ -19,7 +19,7 @@ end
 
 function mean_function_initializer(::typeof(default_linear_mean), rng::AbstractRNG)
     function init(X, y)
-        return (β = randn(rng, size(X,2)), μ = zero(eltype(y)))
+        return (β = randn(rng, length(X)), μ = zero(eltype(y)))
     end
 end
 
