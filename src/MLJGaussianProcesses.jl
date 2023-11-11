@@ -55,6 +55,7 @@ MMI.@mlj_model mutable struct GPR <: MMI.Probabilistic
     μ_init::Function = mean_function_initializer(μ, Random.GLOBAL_RNG)
     σ²::Float64 = 1e-6::(_ > 0)
     optimizer::Optim.AbstractOptimizer = LBFGS()
+    optimizer_opts::NamedTuple = (;)
 end
 
 
@@ -78,13 +79,13 @@ function MMI.fit(gpr::GPR, verbosity, X, y)
 
     # default option uses finite diff methods
     if verbosity > 0
-      opt = Optim.optimize(
-          objective ∘ unflatten,
-          θ -> only(Zygote.gradient(objective ∘ unflatten, θ)),
-          flat_θᵢ,
-          gpr.optimizer,
-          Optim.Options(show_trace = true);
-          inplace=false,
+        opt = Optim.optimize(
+            objective ∘ unflatten,
+            θ -> only(Zygote.gradient(objective ∘ unflatten, θ)),
+            flat_θᵢ,
+            gpr.optimizer,
+            Optim.Options(;merge((show_trace=true,), gpr.optimizer_opts)...);
+            inplace=false,
         )
     else
         opt = Optim.optimize(
@@ -92,6 +93,7 @@ function MMI.fit(gpr::GPR, verbosity, X, y)
             θ -> only(Zygote.gradient(objective ∘ unflatten, θ)),
             flat_θᵢ,
             gpr.optimizer,
+            Optim.Options(; gpr.optimizer_opts...);
             inplace=false,
         )
     end
