@@ -60,7 +60,7 @@ end
 
 
 function MMI.fit(gpr::GPR, verbosity, X, y)
-    Xmatrix = MMI.matrix(X)'  # make matrix p × n for efficiency
+    Xmatrix = ColVecs(MMI.matrix(X)')  # make matrix p × n for efficiency
     nfeatures = size(Xmatrix, 1)
 
     # augment θ_init to include mean function params and σ²
@@ -131,7 +131,7 @@ MMI.fitted_params(gpr::GPR, fitresult) = (;θ_best=fitresult[2], σ²=fitresult[
 
 function MMI.predict(gpr::GPR, fitresult, X)
     p_fₓ, θ, σ² = fitresult
-    Xdata = MMI.matrix(X)'
+    Xdata = ColVecs(MMI.matrix(X)')
 
     fₓ = p_fₓ(Xdata)
     return marginals(fₓ)
@@ -140,7 +140,7 @@ end
 
 function MMI.predict_mean(gpr::GPR, fitresult, X)
     p_fₓ, θ, σ² = fitresult
-    Xdata = MMI.matrix(X)'
+    Xdata = ColVecs(MMI.matrix(X)')
 
     fₓ = p_fₓ(Xdata)
 
@@ -148,8 +148,8 @@ function MMI.predict_mean(gpr::GPR, fitresult, X)
 end
 
 
+# mean and mode should be equal...
 function MMI.predict_mode(gpr::GPR, fitresult, X)
-    # return the coordinates of the bmu for each instance
     MMI.predict_mean(gpr, fitresult, X)
 end
 
@@ -191,7 +191,7 @@ where
 Train the machine with `fit!(mach, rows=...)`.
 - `y`: a `Vector` of target variables of scitype `Continuous`.
 # Hyper-parameters
-- `μ=0`: Constant value to use for mean function of Gaussian Process.
+- `μ=default_zero_mean`: The mean function for the Gaussian Process. By default, a constant mean of zero is used..
 - `k=default_kernel`: A function `k(θ)` which takes parameters `θ` and returns a `KernelFunction`. `default_kernel` is the classic RBF kernel with variance `σf²`, and length scale `ℓ`
 - `θ_init=θ_default`: Default parameters to initialize the optimization. Defaults to `θ_default = (1.0, 1.0)` for the default kernel.
 - `σ²=1e-6`: Measurement noise (variance). Must be greater than `0` to ensure stability of internal Cholesky factorization.
